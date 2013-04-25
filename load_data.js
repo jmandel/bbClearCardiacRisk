@@ -1,52 +1,53 @@
 (function(window){
 
-  var urls = {
-    base: "http://hl7connect.healthintersections.com.au/svc/fhir",
-    lab_feed: "/labreport/search.xml?patient.subject.id={personId}&format=application/json",
-    patient: "/person/@{personId}?format=application/json"
-  },
   m = JSONSelect.match;
 
   window.extractData = function() {
-    var ret = $.Deferred(),
-    lab_feed_url = urls.base + urls.lab_feed,
-    patient_url = urls.base + urls.patient,
-    labs,
-    pt,
-    subs = {
-      "personId": parseInt(getParameterByName("personId"))
-    };
+    var ret = $.Deferred();
 
-    for (var s in subs) {
-      lab_feed_url = lab_feed_url.replace("{"+s+"}", subs[s]);
-      patient_url = patient_url.replace("{"+s+"}", subs[s]);
-    }
+    onBBData(function(data){
 
-    labs = $.ajax(lab_feed_url, {dataType:'json'});
-    pt = $.ajax(patient_url, {dataType:'json'});
+      var demographics = data.demographics();
+      var labs = data.labs();
+      var vitals = data.vitals();
 
-    $.when(pt, labs).done(function(patient_result, lab_result){
+      var gender = demographics.gender === 'Female' ? "female" : "male",
+      dob = new XDate(demographics.dob),
+      age = Math.floor(dob.diffYears(new XDate()));
 
-      var patient = patient_result[0],
-      labs = lab_result[0],
-      gender = patient.Person.gender.text === 'F' ? "female" : "male",
-      dob = new XDate(patient.Person.dob.value),
-      age = Math.floor(dob.diffYears(new XDate())),
-      officialName = m(':has(.use:val("official"))', patient.Person.name)[0],
-      fname = m('.type:val("given")  ~ .value', officialName)[0],
-      lname = m('.type:val("family") ~ .value', officialName)[0],
+      var n = demographics.name;
+      fname = n.prefix + " " + n.given.join(" ");
+      lname = n.family;
 
-      by_loinc = function(loincs){
+      by_code = function(section, codes){
         var ret = [];
         $.each(arguments, function(i,l){
-          ret = ret.concat(m('.result > :has(.code:val("'+l+'")) ', labs));
+          if (i===0) return;
+          ret = ret.concat(m('.results > :has(.code:val("'+l+'")) ', section));
         });
         return ret;
       };
 
-      var hscrp = by_loinc("30522-7");
-      var cholesterol = by_loinc("14647-2", "2093-3");
-      var hdl = by_loinc("2085-9");
+      var hscrp = by_code(labs, "30522-7");
+      var cholesterol = by_code(labs, "14647-2", "2093-3");
+      var hdl = by_code(labs, "2085-9");
+      var sbp = by_code(vitals, "8480-6");
+
+      if (hscrp.length === 0){
+        hscrp.push({value: 0.7, unit:"mg/L"});
+      }
+
+      if (cholesterol.length === 0){
+        cholesterol.push({value: 220, unit:"mg/dL"});
+      }
+
+      if (hdl.length === 0){
+        hdl.push({value: 50, unit:"mg/dL"});
+      }
+
+      if (sbp.length === 0){
+        sbp.push({value: 130, unit:"mm[Hg]"});
+      }
 
       p = defaultPatient();
       p.birthday = {value:dob};
@@ -58,48 +59,36 @@
       p.cholesterol={value:cholesterol_in_mg_per_dl(cholesterol[0])};
       p.HDL={value:cholesterol_in_mg_per_dl(hdl[0])};
       p.LDL = {value:p.cholesterol.value-p.HDL.value};
-
+      p.sbp = {value:sbp[0].value};
       ret.resolve(p);
     });
+
     return ret.promise();
   };
 
   function defaultPatient(){
     return {
-      sbp: {value: 120},
       smoker_p: {value: false},
       fx_of_mi_p: {value: false}
     }
   };
 
   cholesterol_in_mg_per_dl = function(v){
-    if (v.valueQuantity.units === "mg/dL"){
-      return parseFloat(v.valueQuantity.value);
+    if (v.unit === "mg/dL"){
+      return parseFloat(v.value);
     }
-    else if (v.valueQuantity.units === "mmol/L"){
-      return parseFloat(v.valueQuantity.value)/ 0.026;
+    else if (v.unit === "mmol/L"){
+      return parseFloat(v.value)/ 0.026;
     }
 
-    throw "Unanticipated cholesterol units: " + v.valueQuantity.units;
+    throw "Unanticipated cholesterol units: " + v.unit;
   };
 
   hscrp_in_mg_per_l = function(v){
-    if (v.valueQuantity.units === "mg/L"){
-      return parseFloat(v.valueQuantity.value);
+    if (v.unit === "mg/L"){
+      return parseFloat(v.value);
     }
-    throw "Unanticipated hsCRP units: " + v.valueQuantity.units;
+    throw "Unanticipated hsCRP units: " + v.unit;
   };
 
-
-  function getParameterByName(name)
-  {
-    name = name.replace(/[\[]/, "\\\[").replace(/[\]]/, "\\\]");
-    var regexS = "[\\?&]" + name + "=([^&#]*)";
-    var regex = new RegExp(regexS);
-    var results = regex.exec(window.location.search);
-    if(results == null)
-      return "";
-    else
-      return decodeURIComponent(results[1].replace(/\+/g, " "));
-  }
 })(window);

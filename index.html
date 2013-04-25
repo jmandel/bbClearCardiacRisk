@@ -1,5 +1,15 @@
 <!DOCTYPE html>
 <html>
+
+  <script src="http://bluebutton.blacktm.com/bluebutton-latest-dev.js"></script>
+  <script src="bbClearClient.js"></script>
+
+  <script>
+    onBBData(function(bb){
+      console.log("Meds from bbClear ", bb.medications());
+    });
+
+  </script>
   <!--
   Original Design: David McCandless & Stefanie Posavec for Wired Magazine <http://informationisbeautiful.net>
   Implementation: Arjun Sanyal <arjun.sanyal@childrens.harvard.edu>
