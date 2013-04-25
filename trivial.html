@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<h1>Data from bbClear (onBBData via window.opener)</h1>
+  <pre id="bbxml" style="width: 100%; height: 30em;">
+    Requesting data from the opener...
+  </pre>
+
+  <script src="http://bluebutton.blacktm.com/bluebutton-latest-dev.js"></script>
+  <script src="bbClearClient.js"></script>
+  <script>
+    onBBData(function(bb){
+      console.log("Meds from bbClear ", bb.medications());
+      console.log(bb);
+      b=bb;
+      document.getElementById("bbxml").innerHTML = bb.data.json();
+    });
+  </script>
+</html>
